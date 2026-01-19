@@ -1,6 +1,3 @@
-# Ignorar credenciais sensíveis
-client_secret.json
-
 # Ignorar arquivos do Python
 __pycache__/
 *.pyc
