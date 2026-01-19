@@ -3,13 +3,14 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from openai import OpenAI
 
-# ----- CONFIG BÁSICA -----
+# ----- CONFIG -----
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 
 st.set_page_config(
@@ -42,23 +43,16 @@ if gsc_client_id and gsc_client_secret:
 else:
     st.sidebar.info("Google GSC não configurado (opcional)")
 
-gsc_property = None
-if use_gsc:
-    gsc_property = st.sidebar.text_input(
-        "Propriedade do Search Console",
-        placeholder="https://www.teusite.pt/"
-    )
-
 st.sidebar.markdown(
     """
 **Funcionalidades**
 - Análise SEO on-page
 - Sugestões com IA
-- Queries reais do Google (opcional)
+- Queries reais do Google (opcional e automático)
 """
 )
 
-# ----- GOOGLE SEARCH CONSOLE -----
+# ----- FUNÇÕES -----
 def get_gsc_service():
     client_config = {
         "installed": {
@@ -67,33 +61,23 @@ def get_gsc_service():
             "redirect_uris": ["http://localhost"]
         }
     }
-
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
     creds = flow.run_local_server(port=0)
     service = build("searchconsole", "v1", credentials=creds)
     return service
 
-
 def fetch_gsc_queries(service, site_url, days=28):
     end_date = datetime.today().date()
     start_date = end_date - timedelta(days=days)
-
     request = {
         "startDate": str(start_date),
         "endDate": str(end_date),
         "dimensions": ["QUERY"],
         "rowLimit": 100,
     }
-
-    response = (
-        service.searchanalytics()
-        .query(siteUrl=site_url, body=request)
-        .execute()
-    )
-
+    response = service.searchanalytics().query(siteUrl=site_url, body=request).execute()
     rows = response.get("rows", [])
     data = []
-
     for r in rows:
         data.append({
             "query": r["keys"][0],
@@ -102,19 +86,15 @@ def fetch_gsc_queries(service, site_url, days=28):
             "ctr": round(r.get("ctr", 0) * 100, 2),
             "position": round(r.get("position", 0), 1),
         })
-
     return pd.DataFrame(data)
 
-# ----- ANALISAR HTML -----
 def analyze_page(url: str):
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=20)
     r.raise_for_status()
-
     soup = BeautifulSoup(r.text, "html.parser")
 
     title = soup.title.string.strip() if soup.title else ""
-
     meta_desc = ""
     for m in soup.find_all("meta"):
         if m.get("name") == "description":
@@ -124,9 +104,7 @@ def analyze_page(url: str):
     h1 = [h.get_text(strip=True) for h in soup.find_all("h1")]
     h2 = [h.get_text(strip=True) for h in soup.find_all("h2")]
 
-    text = " ".join(
-        [p.get_text(" ", strip=True) for p in soup.find_all("p")]
-    )
+    text = " ".join([p.get_text(" ", strip=True) for p in soup.find_all("p")])
 
     return {
         "title": title,
@@ -137,10 +115,8 @@ def analyze_page(url: str):
         "raw_text": text[:4000],
     }
 
-# ----- OPENAI -----
 def get_openai_suggestions(openai_key, page_data, niche, gsc_df=None):
     client = OpenAI(api_key=openai_key)
-
     gsc_text = ""
     if gsc_df is not None and not gsc_df.empty:
         gsc_text = f"\nDADOS DO GOOGLE SEARCH CONSOLE:\n{gsc_df.head(15).to_string(index=False)}"
@@ -178,9 +154,13 @@ Responde em PT-PT, bem estruturado.
 
     return response.choices[0].message.content
 
+# Extrair domínio principal para GSC automaticamente
+def get_gsc_property_from_url(url):
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
 # ----- UI -----
 col1, col2 = st.columns(2)
-
 with col1:
     url = st.text_input("URL da página", placeholder="https://www.teusite.pt/")
 with col2:
@@ -193,8 +173,6 @@ if st.button("🔍 Analisar SEO"):
         st.error("Preenche a URL e o nicho.")
     elif not openai_key:
         st.error("OPENAI_API_KEY não configurada.")
-    elif use_gsc and not gsc_property:
-        st.error("Indica a propriedade do Search Console.")
     else:
         try:
             with st.spinner("A analisar HTML..."):
@@ -202,20 +180,19 @@ if st.button("🔍 Analisar SEO"):
 
             gsc_df = None
             if use_gsc:
-                with st.spinner("A ligar ao Google Search Console..."):
+                gsc_property = get_gsc_property_from_url(url)
+                with st.spinner(f"A ligar ao Google Search Console ({gsc_property})..."):
                     service = get_gsc_service()
                     gsc_df = fetch_gsc_queries(service, gsc_property)
 
                 st.subheader("🔍 Google Search Console")
                 if gsc_df.empty:
-                    st.warning("Sem dados no GSC.")
+                    st.warning("Sem dados no GSC para esta propriedade.")
                 else:
                     st.dataframe(gsc_df)
 
             with st.spinner("🤖 A gerar recomendações SEO..."):
-                suggestions = get_openai_suggestions(
-                    openai_key, page_data, niche, gsc_df
-                )
+                suggestions = get_openai_suggestions(openai_key, page_data, niche, gsc_df)
 
             st.subheader("📈 Recomendações SEO")
             st.write(suggestions)
@@ -224,6 +201,4 @@ if st.button("🔍 Analisar SEO"):
             st.error("Erro durante a análise.")
             st.exception(e)
 
-st.info(
-    "Ferramenta para uso próprio. GSC é opcional mas recomendado."
-)
+st.info("Ferramenta para uso próprio. GSC é opcional mas recomendado.")
