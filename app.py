@@ -52,19 +52,24 @@ st.sidebar.markdown(
 """
 )
 
-# ----- FUNÇÕES -----
+# ----- GOOGLE SEARCH CONSOLE SERVICE -----
 def get_gsc_service():
-    client_config = {
-        "installed": {
-            "client_id": gsc_client_id,
-            "client_secret": gsc_client_secret,
-            "redirect_uris": ["http://localhost"]
-        }
-    }
-    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    creds = flow.run_local_server(port=0)
-    service = build("searchconsole", "v1", credentials=creds)
-    return service
+    """
+    Conecta ao Google Search Console usando client_secret.json
+    O arquivo client_secret.json deve estar na mesma pasta do app
+    """
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "client_secret.json",
+            scopes=SCOPES
+        )
+        creds = flow.run_local_server(port=0)
+        service = build("searchconsole", "v1", credentials=creds)
+        return service
+    except Exception as e:
+        st.error("Erro ao conectar com Google Search Console.")
+        st.exception(e)
+        return None
 
 def fetch_gsc_queries(service, site_url, days=28):
     end_date = datetime.today().date()
