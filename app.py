@@ -26,30 +26,17 @@ st.markdown(
 
 # ----- SECRETS -----
 openai_key = st.secrets.get("OPENAI_API_KEY")
-gsc_client_id = st.secrets.get("GSC_CLIENT_ID")
-gsc_client_secret = st.secrets.get("GSC_CLIENT_SECRET")
 
 # ----- SIDEBAR -----
 st.sidebar.header("Configuração")
-
 if openai_key:
     st.sidebar.success("OpenAI API Key OK")
 else:
     st.sidebar.error("OPENAI_API_KEY não configurada")
 
-use_gsc = False
-if gsc_client_id and gsc_client_secret:
-    use_gsc = st.sidebar.checkbox("Usar Google Search Console", value=True)
-else:
-    st.sidebar.info("Google GSC não configurado (opcional)")
-
+use_gsc = st.sidebar.checkbox("Usar Google Search Console (opcional)", value=True)
 st.sidebar.markdown(
-    """
-**Funcionalidades**
-- Análise SEO on-page
-- Sugestões com IA
-- Queries reais do Google (opcional e automático)
-"""
+    "Para usar o GSC, faça upload do arquivo `client_secret.json` na mesma pasta do app."
 )
 
 # ----- GOOGLE SEARCH CONSOLE SERVICE -----
@@ -71,6 +58,7 @@ def get_gsc_service():
         st.exception(e)
         return None
 
+# ----- BUSCAR QUERIES GSC -----
 def fetch_gsc_queries(service, site_url, days=28):
     end_date = datetime.today().date()
     start_date = end_date - timedelta(days=days)
@@ -93,6 +81,7 @@ def fetch_gsc_queries(service, site_url, days=28):
         })
     return pd.DataFrame(data)
 
+# ----- ANALISAR PÁGINA -----
 def analyze_page(url: str):
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=20)
@@ -120,6 +109,7 @@ def analyze_page(url: str):
         "raw_text": text[:4000],
     }
 
+# ----- OPENAI RECOMENDAÇÕES -----
 def get_openai_suggestions(openai_key, page_data, niche, gsc_df=None):
     client = OpenAI(api_key=openai_key)
     gsc_text = ""
@@ -145,8 +135,7 @@ Tarefas:
 1. Lista 10 keywords prioritárias (tabela).
 2. Sugere novo title (≤60 chars) e meta description (≤155).
 3. Indica melhorias on-page (conteúdo + estrutura).
-4. Identifica oportunidades com base em CTR/posição (se houver GSC).
-5. Sugere 3 novas páginas/artigos estratégicos.
+4. Sugere 3 novas páginas/artigos estratégicos.
 
 Responde em PT-PT, bem estruturado.
 """
@@ -159,7 +148,7 @@ Responde em PT-PT, bem estruturado.
 
     return response.choices[0].message.content
 
-# Extrair domínio principal para GSC automaticamente
+# ----- UTIL -----
 def get_gsc_property_from_url(url):
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.netloc}/"
@@ -185,16 +174,16 @@ if st.button("🔍 Analisar SEO"):
 
             gsc_df = None
             if use_gsc:
-                gsc_property = get_gsc_property_from_url(url)
-                with st.spinner(f"A ligar ao Google Search Console ({gsc_property})..."):
-                    service = get_gsc_service()
+                service = get_gsc_service()
+                if service:
+                    gsc_property = get_gsc_property_from_url(url)
                     gsc_df = fetch_gsc_queries(service, gsc_property)
 
-                st.subheader("🔍 Google Search Console")
-                if gsc_df.empty:
-                    st.warning("Sem dados no GSC para esta propriedade.")
-                else:
-                    st.dataframe(gsc_df)
+                    st.subheader("🔍 Google Search Console")
+                    if gsc_df.empty:
+                        st.warning("Sem dados no GSC para esta propriedade.")
+                    else:
+                        st.dataframe(gsc_df)
 
             with st.spinner("🤖 A gerar recomendações SEO..."):
                 suggestions = get_openai_suggestions(openai_key, page_data, niche, gsc_df)
@@ -206,4 +195,4 @@ if st.button("🔍 Analisar SEO"):
             st.error("Erro durante a análise.")
             st.exception(e)
 
-st.info("Ferramenta para uso próprio. GSC é opcional mas recomendado.")
+st.info("Ferramenta para uso próprio. GSC é opcional, mas recomendado para dados reais.")
