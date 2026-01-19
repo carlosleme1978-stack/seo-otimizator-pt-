@@ -1,0 +1,15 @@
+# Ignorar credenciais sensíveis
+client_secret.json
+
+# Ignorar arquivos do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignorar arquivos do Streamlit local
+.streamlit/
+
+# Ignorar logs
+*.log
+
