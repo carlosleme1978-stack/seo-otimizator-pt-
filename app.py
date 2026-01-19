@@ -35,9 +35,9 @@ else:
     st.sidebar.error("OPENAI_API_KEY não configurada")
 
 use_gsc = st.sidebar.checkbox("Usar Google Search Console (opcional)", value=True)
-st.sidebar.markdown(
-    
-)
+# st.sidebar.markdown(
+#     "Para usar o GSC, faça upload do arquivo `client_secret.json` na mesma pasta do app."
+# )
 
 # ----- GOOGLE SEARCH CONSOLE SERVICE -----
 def get_gsc_service():
