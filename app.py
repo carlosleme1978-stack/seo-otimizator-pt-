@@ -36,7 +36,7 @@ else:
 
 use_gsc = st.sidebar.checkbox("Usar Google Search Console (opcional)", value=True)
 st.sidebar.markdown(
-    "Para usar o GSC, faça upload do arquivo `client_secret.json` na mesma pasta do app."
+    
 )
 
 # ----- GOOGLE SEARCH CONSOLE SERVICE -----
